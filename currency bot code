@@ -1,0 +1,108 @@
+import logging
+from aiogram import Bot, Dispatcher, types
+from aiogram.filters import Command
+from aiogram.types import Message, CallbackQuery
+from aiogram.enums import ParseMode
+from aiogram.utils.keyboard import InlineKeyboardBuilder
+from aiogram.client.default import DefaultBotProperties
+import requests
+
+# Токен вашего бота
+API_TOKEN = "7943192472:AAHem2G04p4kRO9KQjHJKzMVqKcnhQ5zYDI"
+
+# Настройка логирования
+logging.basicConfig(level=logging.INFO)
+
+# Инициализация бота
+bot = Bot(
+    token=API_TOKEN,
+    default=DefaultBotProperties(parse_mode=None)  # Отключаем HTML-разметку
+)
+dp = Dispatcher()
+
+# Словарь для хранения языка пользователя
+user_language = {}
+
+# Список валют стран, граничащих с Украиной
+CURRENCIES = {
+    "USD": "🇺🇸 Доллар США",
+    "EUR": "🇪🇺 Евро",
+    "PLN": "🇵🇱 Польский злотый",
+    "HUF": "🇭🇺 Венгерский форинт",
+    "RON": "🇷🇴 Румынский лей",
+    "MDL": "🇲🇩 Молдавский лей",
+    "BYN": "🇧🇾 Белорусский рубль",
+    "RUB": "🇷🇺 Российский рубль",
+}
+
+# Функция для получения курса валют
+def get_exchange_rate(base_currency: str, target_currency: str) -> float:
+    url = f"https://api.exchangerate-api.com/v4/latest/{base_currency}"
+    response = requests.get(url)
+    data = response.json()
+    return data['rates'].get(target_currency)
+
+# Функция для создания инлайн-клавиатуры с валютами
+def get_currency_keyboard():
+    builder = InlineKeyboardBuilder()
+    for currency_code, currency_name in CURRENCIES.items():
+        builder.button(text=f"{currency_name} ({currency_code})", callback_data=f"currency_{currency_code}")
+    builder.adjust(2)  # Две кнопки в строке
+    return builder.as_markup()
+
+# Обработчик команды /start
+@dp.message(Command("start"))
+async def cmd_start(message: Message):
+    user_language[message.from_user.id] = "ru"  # По умолчанию русский язык
+    await message.answer(
+        "Привет! Я бот, который показывает курс валют.\n"
+        "Используй команду /rate чтобы выбрать валюту.",
+        reply_markup=get_currency_keyboard(),
+    )
+
+# Обработчик команды /language
+@dp.message(Command("language"))
+async def cmd_language(message: Message):
+    builder = InlineKeyboardBuilder()
+    builder.button(text="🇷🇺 Русский", callback_data="lang_ru")
+    builder.button(text="🇬🇧 English", callback_data="lang_en")
+    await message.answer("Выберите язык / Choose language:", reply_markup=builder.as_markup())
+
+# Обработчик команды /rate
+@dp.message(Command("rate"))
+async def cmd_rate(message: Message):
+    await message.answer("Выберите валюту:", reply_markup=get_currency_keyboard())
+
+# Обработчик нажатий на инлайн-кнопки
+@dp.callback_query(lambda c: c.data.startswith("currency_"))
+async def process_currency(callback: CallbackQuery):
+    target_currency = callback.data.split("_")[1]
+    rate = get_exchange_rate("USD", target_currency)
+    if rate:
+        lang = user_language.get(callback.from_user.id, "ru")
+        if lang == "ru":
+            await callback.message.answer(f"Курс USD к {CURRENCIES[target_currency]}: {rate}")
+        else:
+            await callback.message.answer(f"Exchange rate USD to {CURRENCIES[target_currency]}: {rate}")
+    else:
+        await callback.message.answer("Валюта не найдена / Currency not found.")
+    await callback.answer()
+
+# Обработчик выбора языка
+@dp.callback_query(lambda c: c.data.startswith("lang_"))
+async def process_language(callback: CallbackQuery):
+    lang = callback.data.split("_")[1]
+    user_language[callback.from_user.id] = lang
+    if lang == "ru":
+        await callback.message.answer("Язык изменен на русский.")
+    else:
+        await callback.message.answer("Language changed to English.")
+    await callback.answer()
+
+# Запуск бота
+async def main():
+    await dp.start_polling(bot)
+
+if __name__ == "__main__":
+    import asyncio
+    asyncio.run(main())
