@@ -8,7 +8,7 @@ from aiogram.client.default import DefaultBotProperties
 import requests
 
 # Токен вашего бота
-API_TOKEN = "7943192472:AAHem2G04p4kRO9KQjHJKzMVqKcnhQ5zYDI"
+API_TOKEN = "YOUR API TOKEN"
 
 # Настройка логирования
 logging.basicConfig(level=logging.INFO)
